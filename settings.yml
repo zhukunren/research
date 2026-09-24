@@ -8,6 +8,8 @@ universe:
   markets: [SH, SZ, BJ]
   min_market_cap_yi: 100
   industry_leader_rank_max: 3
+  broad_industry_rank_mode: reference
+  verified_subindustry_ranks: {}
 
 data:
   max_quote_age_days: 3
@@ -30,6 +32,8 @@ valuation:
   pe_floor: 8
   pe_cap: 60
   max_peg_for_core: 2.5
+  min_growth_span_years: 2
+  max_growth_span_years: 3
   scenarios:
     bear:
       peg_range: [0.5, 0.8]
