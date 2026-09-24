@@ -9,3 +9,4 @@ data/*.parquet
 
 # Generated research output includes model-derived summaries
 output/*.json
+output/forward_validation.md
