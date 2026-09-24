@@ -1,0 +1,11 @@
+.cache/stock_picker/
+config.ini
+__pycache__/
+*.py[cod]
+
+# Local research source files and large market data
+research_report/*.pdf
+data/*.parquet
+
+# Generated research output includes model-derived summaries
+output/*.json

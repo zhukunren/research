@@ -1,0 +1,1045 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>研究终端 · 投研观察池</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --canvas: #f3f6f4;
+      --surface: #ffffff;
+      --ink: #1c3028;
+      --muted: #66756e;
+      --line: #dce5e0;
+      --line-strong: #cbd8d1;
+      --green: #206e55;
+      --green-soft: #e7f2ec;
+      --amber: #9a6019;
+      --amber-soft: #fbf1df;
+      --red: #a3443d;
+      --red-soft: #f8eae8;
+      --blue: #41687b;
+      --blue-soft: #eaf1f4;
+      --shadow: 0 1px 2px rgba(22, 48, 37, 0.05);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    button, input, select { font: inherit; }
+    button, select { cursor: pointer; }
+    button:focus-visible, input:focus-visible, select:focus-visible, tr:focus-visible {
+      outline: 3px solid rgba(32, 110, 85, .2);
+      outline-offset: 2px;
+    }
+    .topbar {
+      height: 62px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 0 max(24px, calc((100vw - 1500px) / 2));
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+    }
+    .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      color: #fff;
+      background: var(--green);
+      border-radius: 5px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .brand-name { font-size: 15px; font-weight: 700; white-space: nowrap; }
+    .brand-context { color: var(--muted); font-size: 12px; padding-left: 12px; border-left: 1px solid var(--line); white-space: nowrap; }
+    .top-meta { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+    .shell { max-width: 1500px; margin: 0 auto; padding: 22px 24px 40px; }
+    .status-strip {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 22px;
+      padding: 12px 14px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--amber);
+      border-radius: 5px;
+      box-shadow: var(--shadow);
+    }
+    .status-strip.good { border-left-color: var(--green); }
+    .status-copy { min-width: 0; }
+    .status-title { font-size: 13px; font-weight: 700; }
+    .status-detail { margin-top: 2px; color: var(--muted); font-size: 12px; }
+    .workspace-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 18px;
+    }
+    h1 { margin: 0; font-size: 25px; line-height: 1.25; font-weight: 700; }
+    .page-subtitle { margin-top: 5px; color: var(--muted); font-size: 12px; }
+    .actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+    .refresh-option { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .refresh-option input { width: 15px; height: 15px; accent-color: var(--green); }
+    .primary-button {
+      min-height: 38px;
+      padding: 0 14px;
+      color: #fff;
+      background: var(--green);
+      border: 1px solid var(--green);
+      border-radius: 5px;
+      font-weight: 600;
+    }
+    .primary-button:hover { background: #185940; }
+    .primary-button:disabled { cursor: wait; opacity: .65; }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin-bottom: 22px;
+      padding: 14px 0;
+      background: var(--surface);
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .metric { min-width: 0; padding: 2px 18px; border-right: 1px solid var(--line); }
+    .metric:first-child { padding-left: 14px; }
+    .metric:last-child { border-right: 0; }
+    .metric-label { color: var(--muted); font-size: 12px; }
+    .metric-value { margin-top: 2px; font-size: 23px; line-height: 1.3; font-variant-numeric: tabular-nums; font-weight: 650; }
+    .metric-note { color: var(--muted); font-size: 11px; }
+    .metric-value.green { color: var(--green); }
+    .metric-value.amber { color: var(--amber); }
+    .metric-value.red { color: var(--red); }
+    .view-tabs { display: flex; align-items: center; gap: 22px; border-bottom: 1px solid var(--line-strong); }
+    .view-tab {
+      position: relative;
+      min-height: 42px;
+      padding: 0 2px;
+      color: var(--muted);
+      background: transparent;
+      border: 0;
+      font-weight: 600;
+    }
+    .view-tab[aria-selected="true"] { color: var(--green); }
+    .view-tab[aria-selected="true"]::after {
+      position: absolute;
+      right: 0;
+      bottom: -1px;
+      left: 0;
+      height: 2px;
+      background: var(--green);
+      content: "";
+    }
+    .tab-count { margin-left: 6px; color: var(--muted); font-size: 11px; font-weight: 500; }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 0;
+    }
+    .filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .filter-select, .search-input {
+      height: 36px;
+      color: var(--ink);
+      background: var(--surface);
+      border: 1px solid var(--line-strong);
+      border-radius: 4px;
+    }
+    .filter-select { min-width: 130px; padding: 0 30px 0 10px; }
+    .search-input { width: 230px; padding: 0 10px; }
+    .result-count { color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .content-grid { display: grid; grid-template-columns: minmax(480px, 1.12fr) minmax(360px, .88fr); gap: 22px; align-items: start; }
+    .history-layout { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 22px; align-items: start; padding-top: 14px; }
+    .history-table { min-width: 620px; }
+    .history-row { cursor: pointer; }
+    .history-row:hover, .history-row.selected { background: var(--green-soft); }
+    .history-row:focus-visible { outline-offset: -3px; }
+    .history-sub { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; }
+    .history-counts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .history-count { min-width: 0; padding: 8px 10px; border-right: 1px solid var(--line); }
+    .history-count:last-child { border-right: 0; }
+    .history-count span, .history-count strong { display: block; }
+    .history-count span { color: var(--muted); font-size: 10px; }
+    .history-count strong { margin-top: 2px; font-size: 16px; font-variant-numeric: tabular-nums; }
+    .history-detail-table { min-width: 760px; }
+    .history-reason { max-width: 260px; color: var(--muted); font-size: 11px; white-space: normal; }
+    .change-list { margin: 0; padding-left: 18px; }
+    .change-list li { margin: 4px 0; }
+    .list-column { min-width: 0; }
+    .table-frame { overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 5px; box-shadow: var(--shadow); }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    .candidate-table { min-width: 650px; }
+    th { height: 38px; padding: 0 12px; color: var(--muted); background: #f8faf9; border-bottom: 1px solid var(--line); font-size: 11px; font-weight: 600; white-space: nowrap; }
+    td { padding: 11px 12px; border-bottom: 1px solid #e9efec; vertical-align: middle; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .candidate-row { cursor: pointer; transition: background .12s ease; }
+    .candidate-row:hover { background: #f5f9f6; }
+    .candidate-row.selected { background: var(--green-soft); }
+    .candidate-row:focus-visible { outline-offset: -3px; }
+    .security-name { display: block; font-weight: 650; white-space: nowrap; }
+    .security-code { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+    .numeric { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .status-tag { display: inline-flex; align-items: center; min-height: 22px; padding: 1px 7px; border-radius: 3px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .status-tag.CORE { color: var(--green); background: var(--green-soft); }
+    .status-tag.PENDING { color: var(--amber); background: var(--amber-soft); }
+    .status-tag.REJECTED { color: var(--red); background: var(--red-soft); }
+    .status-tag.OUTSIDE_SCOPE { color: var(--blue); background: var(--blue-soft); }
+    .empty-state { padding: 34px 18px; color: var(--muted); text-align: center; }
+    .detail-column { min-width: 0; padding-left: 20px; border-left: 1px solid var(--line-strong); }
+    .detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 2px 0 14px; border-bottom: 1px solid var(--line); }
+    .detail-name { margin: 0; font-size: 20px; line-height: 1.35; }
+    .detail-code { margin-top: 4px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .detail-price { text-align: right; white-space: nowrap; }
+    .detail-price strong { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+    .detail-price span { color: var(--muted); font-size: 11px; }
+    .detail-section { padding: 14px 0; border-bottom: 1px solid var(--line); }
+    .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+    .section-heading h3 { margin: 0; font-size: 13px; font-weight: 700; }
+    .section-heading span { color: var(--muted); font-size: 11px; }
+    .logic-label { margin: 8px 0 2px; color: var(--muted); font-size: 11px; }
+    .logic-text { margin: 0; overflow-wrap: anywhere; }
+    .inline-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .inline-metric { min-width: 0; padding: 7px 8px; background: #f6f8f7; border-radius: 4px; }
+    .inline-metric span { display: block; color: var(--muted); font-size: 10px; }
+    .inline-metric strong { display: block; margin-top: 2px; font-size: 13px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .scenario-table { margin-top: 10px; }
+    .scenario-table th, .scenario-table td { height: auto; padding: 7px 8px; }
+    .scenario-table th { background: transparent; }
+    .scenario-table td { font-variant-numeric: tabular-nums; }
+    .tech-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
+    .tech-item { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px dotted var(--line-strong); }
+    .tech-item span:first-child { color: var(--muted); }
+    .tech-item span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+    .risk-list { margin: 0; padding-left: 18px; }
+    .risk-list li { margin: 4px 0; }
+    .source-list { display: flex; flex-direction: column; gap: 6px; }
+    a { color: var(--green); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .report-table { min-width: 760px; }
+    .report-title { max-width: 500px; }
+    .report-title small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+    .pdf-link { white-space: nowrap; font-weight: 600; }
+    .toast { position: fixed; right: 20px; bottom: 20px; z-index: 20; max-width: min(420px, calc(100vw - 40px)); padding: 11px 14px; color: #fff; background: #233b31; border-radius: 5px; box-shadow: 0 5px 20px rgba(0,0,0,.15); }
+    .toast[hidden] { display: none; }
+    .page-footer { margin-top: 22px; padding-top: 12px; color: var(--muted); border-top: 1px solid var(--line); font-size: 11px; }
+    @media (max-width: 980px) {
+      .content-grid { grid-template-columns: minmax(0, 1fr); }
+      .history-layout { grid-template-columns: minmax(0, 1fr); }
+      .detail-column { padding: 18px 0 0; border-top: 1px solid var(--line-strong); border-left: 0; }
+      .candidate-table { min-width: 690px; }
+    }
+    @media (max-width: 620px) {
+      .topbar { height: auto; min-height: 58px; padding: 12px 16px; }
+      .brand-context { display: none; }
+      .top-meta { text-align: right; }
+      .shell { padding: 16px 14px 28px; }
+      .status-strip { padding: 10px; }
+      .workspace-head { align-items: flex-start; flex-direction: column; gap: 12px; }
+      h1 { font-size: 22px; }
+      .actions { justify-content: flex-start; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 8px 0; }
+      .metric { padding: 8px 12px; border-bottom: 1px solid var(--line); }
+      .metric:nth-child(2) { border-right: 0; }
+      .metric:nth-child(n+3) { border-bottom: 0; }
+      .metric:first-child { padding-left: 12px; }
+      .metric-value { font-size: 21px; }
+      .toolbar { align-items: flex-start; flex-direction: column; }
+      .filters { width: 100%; }
+      .filter-select { flex: 1 1 135px; }
+      .search-input { flex: 1 1 100%; width: 100%; }
+      .result-count { align-self: flex-end; }
+      .view-tabs { gap: 18px; }
+      .candidate-table { min-width: 650px; }
+      .history-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .history-count:nth-child(2) { border-right: 0; }
+      .history-count:nth-child(n+3) { border-top: 1px solid var(--line); }
+      .history-count:nth-child(3) { border-right: 1px solid var(--line); }
+      .inline-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .tech-grid { grid-template-columns: 1fr; }
+      .detail-head { align-items: flex-start; }
+      .detail-price strong { font-size: 17px; }
+      .scenario-table { font-size: 12px; }
+    }
+    :root {
+      color-scheme: dark;
+      --canvas: #101613;
+      --surface: #171f1b;
+      --ink: #e2e9e4;
+      --muted: #98a69e;
+      --line: #2c3832;
+      --line-strong: #3d4b43;
+      --green: #54c397;
+      --green-soft: #1d3a2f;
+      --amber: #e3ad58;
+      --amber-soft: #3b3020;
+      --red: #f07b71;
+      --red-soft: #3b2625;
+      --blue: #8cbccc;
+      --blue-soft: #24333a;
+      --shadow: none;
+    }
+    body { background: var(--canvas); color: var(--ink); }
+    .topbar { height: 56px; background: #0b110e; border-color: #29352f; }
+    .brand-mark { color: #0c1712; background: var(--green); border-radius: 3px; }
+    .brand-name { letter-spacing: 0; }
+    .brand-context { border-color: #35423b; }
+    .top-meta { color: #b4c0b8; }
+    .shell { max-width: 1600px; padding-top: 16px; }
+    .status-strip { margin-bottom: 16px; padding: 9px 12px; background: var(--surface); border-radius: 3px; }
+    .status-title { font-size: 12px; }
+    .status-detail { font-size: 11px; }
+    h1 { font-size: 22px; }
+    .page-subtitle { font-variant-numeric: tabular-nums; }
+    .primary-button { background: #1a7959; border-color: #1a7959; border-radius: 3px; }
+    .primary-button:hover { background: #218765; }
+    .metrics { margin-bottom: 14px; padding: 10px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 3px; }
+    .metric { padding: 0 16px; }
+    .metric-value { font-size: 21px; }
+    .view-tabs { gap: 20px; border-color: var(--line-strong); }
+    .view-tab { min-height: 38px; font-size: 12px; }
+    .view-tab[aria-selected="true"] { color: var(--green); }
+    .view-tab[aria-selected="true"]::after { background: var(--green); }
+    .workflow-section { margin-bottom: 2px; padding: 9px 0 13px; border-bottom: 1px solid var(--line); }
+    .workflow-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
+    .workflow-title { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 12px; font-weight: 700; }
+    .workflow-kicker { color: var(--muted); font-size: 10px; font-weight: 600; }
+    .workflow-run-meta { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+    .summary-pending { margin: 0 0 9px; padding: 6px 8px; color: var(--amber); background: var(--amber-soft); border-left: 2px solid var(--amber); font-size: 11px; }
+    .workflow-flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+    .flow-step { position: relative; display: flex; min-width: 0; min-height: 112px; flex-direction: column; align-items: flex-start; padding: 8px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 3px; }
+    .flow-step:not(:last-child)::after { position: absolute; z-index: 1; top: 20px; right: -8px; width: 8px; height: 1px; background: var(--line-strong); content: ""; }
+    .flow-step[data-state="done"] { border-top: 2px solid var(--green); }
+    .flow-step[data-state="warn"] { border-top: 2px solid var(--amber); }
+    .flow-step[data-state="wait"] { border-top: 2px solid var(--line-strong); }
+    .flow-head { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 6px; }
+    .flow-marker { display: grid; width: 24px; height: 24px; flex: 0 0 24px; place-items: center; color: var(--green); background: var(--green-soft); border: 1px solid #315744; border-radius: 50%; font: 600 10px/1 "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+    .flow-step[data-state="warn"] .flow-marker { color: var(--amber); background: var(--amber-soft); border-color: #66502d; }
+    .flow-step[data-state="wait"] .flow-marker { color: var(--muted); background: #252e29; border-color: var(--line-strong); }
+    .flow-state { color: var(--muted); font-size: 10px; white-space: nowrap; }
+    .flow-title { margin-top: 7px; color: var(--muted); font-size: 10px; }
+    .flow-value { display: block; max-width: 100%; margin-top: 1px; overflow: hidden; color: var(--ink); font-size: 16px; font-weight: 650; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .flow-detail { display: block; max-width: 100%; margin-top: 3px; overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+    .workflow-summary { display: grid; grid-template-columns: minmax(130px, 180px) minmax(0, 1fr); align-items: center; gap: 14px; margin-top: 10px; }
+    .distribution-label { color: var(--muted); font-size: 10px; }
+    .distribution-label strong { display: block; color: var(--ink); font-size: 11px; font-weight: 600; }
+    .distribution-total { margin-top: 1px; font-variant-numeric: tabular-nums; }
+    .funnel-track { display: flex; width: 100%; height: 7px; overflow: hidden; background: #242d28; border-radius: 1px; }
+    .funnel-segment { min-width: 0; height: 100%; transition: width .2s ease; }
+    .funnel-segment.CORE { background: var(--green); }
+    .funnel-segment.PENDING { background: var(--amber); }
+    .funnel-segment.REJECTED { background: var(--red); }
+    .funnel-segment.OUTSIDE_SCOPE { background: var(--blue); }
+    .funnel-legend { display: flex; flex-wrap: wrap; gap: 3px 15px; margin-top: 6px; }
+    .legend-item { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 10px; white-space: nowrap; }
+    .legend-dot { width: 7px; height: 7px; border-radius: 1px; }
+    .legend-dot.CORE { background: var(--green); }
+    .legend-dot.PENDING { background: var(--amber); }
+    .legend-dot.REJECTED { background: var(--red); }
+    .legend-dot.OUTSIDE_SCOPE { background: var(--blue); }
+    .toolbar { padding: 10px 0; }
+    .filter-select, .search-input { color: var(--ink); background: #171f1b; border-color: var(--line-strong); border-radius: 3px; }
+    .filter-select option { color: var(--ink); background: var(--surface); }
+    .table-frame { background: var(--surface); border-color: var(--line); border-radius: 3px; }
+    th { color: var(--muted); background: #202923; border-color: var(--line); }
+    td { border-color: #29352f; }
+    .candidate-row:hover { background: #1c2922; }
+    .candidate-row.selected { background: #20372d; }
+    .status-tag { border-radius: 2px; }
+    .empty-state { color: var(--muted); }
+    .detail-column { border-color: var(--line-strong); }
+    .detail-head, .detail-section { border-color: var(--line); }
+    .inline-metric { background: #202923; border-radius: 2px; }
+    .scenario-table th { background: transparent; }
+    .tech-item { border-color: var(--line-strong); }
+    a { color: #73d4ad; }
+    .toast { background: #1c4937; border: 1px solid #3e795e; border-radius: 3px; }
+    .page-footer { border-color: var(--line); }
+    ::selection { color: #07120c; background: #76d9af; }
+    @media (max-width: 980px) {
+      .content-grid { gap: 16px; }
+    }
+    @media (max-width: 620px) {
+      .topbar { padding: 10px 14px; }
+      .shell { padding: 12px 12px 26px; }
+      .top-meta { max-width: 48%; flex-wrap: wrap; justify-content: flex-end; gap: 3px 7px; font-size: 10px; }
+      .status-strip { align-items: flex-start; flex-direction: column; gap: 5px; }
+      .status-badges { max-width: 100%; flex-wrap: wrap; }
+      .workflow-heading { align-items: flex-start; flex-direction: column; gap: 2px; }
+      .workflow-flow { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+      .flow-step { display: grid; min-height: 68px; grid-template-columns: 28px minmax(0, 1fr); grid-template-rows: auto auto auto; column-gap: 8px; padding: 7px 9px; }
+      .flow-step:not(:last-child)::after { top: auto; right: auto; bottom: -7px; left: 21px; width: 1px; height: 6px; }
+      .flow-head { display: contents; }
+      .flow-marker { grid-column: 1; grid-row: 1 / span 3; }
+      .flow-state { grid-column: 2; grid-row: 1; justify-self: end; }
+      .flow-title { grid-column: 2; grid-row: 1; margin-top: 0; justify-self: start; padding-right: 66px; }
+      .flow-value { grid-column: 2; grid-row: 2; margin-top: 0; font-size: 14px; }
+      .flow-detail { grid-column: 2; grid-row: 3; margin-top: 0; }
+      .workflow-summary { grid-template-columns: 1fr; gap: 6px; }
+      .distribution-label { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+      .distribution-label strong { display: inline; }
+      .metric { padding: 7px 10px; }
+      .candidate-table { min-width: 650px; }
+    }
+    .topbar { position: sticky; top: 0; z-index: 20; }
+    .app-frame {
+      display: grid;
+      grid-template-columns: 224px minmax(0, 1fr);
+      max-width: 1760px;
+      min-height: calc(100vh - 56px);
+      margin: 0 auto;
+    }
+    .sidebar {
+      position: sticky;
+      top: 56px;
+      height: calc(100vh - 56px);
+      display: flex;
+      flex-direction: column;
+      padding: 22px 12px 16px;
+      background: var(--surface);
+      border-right: 1px solid var(--line);
+    }
+    .sidebar-heading {
+      margin: 0 10px 12px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+    .view-tabs {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 4px;
+      border: 0;
+    }
+    .view-tab {
+      display: flex;
+      width: 100%;
+      min-height: 40px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 0 10px;
+      color: var(--muted);
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 3px;
+      text-align: left;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .view-tab:hover { color: var(--ink); background: rgba(255,255,255,.035); }
+    .view-tab[aria-current="page"] {
+      color: var(--green);
+      background: var(--green-soft);
+      border-color: rgba(84,195,151,.16);
+    }
+    .view-tab[aria-current="page"]::after { content: none; }
+    .tab-count { margin: 0 0 0 auto; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+    .sidebar-note {
+      margin: auto 8px 0;
+      padding-top: 12px;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+      font-size: 10px;
+      line-height: 1.5;
+    }
+    .shell {
+      width: 100%;
+      max-width: none;
+      min-width: 0;
+      margin: 0;
+      padding: 18px clamp(18px, 2vw, 32px) 36px;
+    }
+    @media (max-width: 900px) {
+      .app-frame { grid-template-columns: 184px minmax(0, 1fr); }
+      .shell { padding-right: 18px; padding-left: 18px; }
+    }
+    @media (max-width: 680px) {
+      .app-frame { display: flex; min-height: calc(100vh - 56px); flex-direction: column; }
+      .sidebar {
+        top: 56px;
+        z-index: 10;
+        width: 100%;
+        height: auto;
+        display: block;
+        padding: 7px 12px;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .sidebar-heading, .sidebar-note { display: none; }
+      .view-tabs { flex-direction: row; gap: 5px; }
+      .view-tab { min-height: 38px; justify-content: center; padding: 0 8px; white-space: nowrap; }
+      .tab-count { margin-left: 5px; }
+      .shell { padding: 14px 12px 26px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">研</div>
+      <div class="brand-name">投研观察池</div>
+      <div class="brand-context">研究工作台</div>
+    </div>
+    <div class="top-meta"><span id="top-data-mode">数据状态读取中</span><span aria-hidden="true">·</span><span id="top-updated">尚无构建记录</span></div>
+  </header>
+  <div class="app-frame">
+    <aside class="sidebar" aria-label="主导航">
+      <div class="sidebar-heading">研究工作台</div>
+      <nav class="view-tabs" aria-label="工作视图">
+        <a class="view-tab" id="tab-watchlist" href="#watchlist-view" aria-current="page">候选池<span id="candidate-tab-count" class="tab-count"></span></a>
+        <a class="view-tab" id="tab-reports" href="#reports-view">研报库<span id="report-tab-count" class="tab-count"></span></a>
+        <a class="view-tab" id="tab-history" href="#history-view">构建历史<span id="history-tab-count" class="tab-count"></span></a>
+      </nav>
+      <div class="sidebar-note">研究数据以研报原文及所示行情日期为准。</div>
+    </aside>
+  <main class="shell">
+    <section id="status-strip" class="status-strip" aria-live="polite">
+      <div class="status-copy">
+        <div id="status-title" class="status-title">正在读取数据状态</div>
+        <div id="status-detail" class="status-detail"></div>
+      </div>
+      <div id="status-badges" class="top-meta"></div>
+    </section>
+
+    <section class="workspace-head">
+      <div>
+        <h1 id="page-title">核心观察池</h1>
+        <div id="page-subtitle" class="page-subtitle">读取最近一次构建结果</div>
+      </div>
+      <div class="actions">
+        <label class="refresh-option"><input id="refresh-ai" type="checkbox"> 重跑研报 AI 归纳</label>
+        <button id="refresh-button" class="primary-button" type="button">重新构建</button>
+      </div>
+    </section>
+
+    <section id="metrics" class="metrics" aria-label="候选池统计"></section>
+
+    <section class="workflow-section" aria-labelledby="workflow-heading">
+      <div class="workflow-heading">
+        <h2 id="workflow-heading" class="workflow-title"><span>研究流程</span><span class="workflow-kicker">PIPELINE</span></h2>
+        <div id="workflow-run-meta" class="workflow-run-meta">等待构建记录</div>
+      </div>
+      <ol id="workflow-flow" class="workflow-flow" aria-label="研报处理与观察池生成流程"></ol>
+      <div class="workflow-summary">
+        <div class="distribution-label"><strong>筛选状态分布</strong><span id="distribution-total" class="distribution-total"></span></div>
+        <div>
+          <div id="funnel-track" class="funnel-track" role="img" aria-label="候选筛选状态分布"></div>
+          <div id="funnel-legend" class="funnel-legend"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="watchlist-view">
+      <div class="toolbar">
+        <div class="filters">
+          <select id="market-filter" class="filter-select" aria-label="筛选市场">
+            <option value="A">A 股市场</option><option value="ALL">全部市场</option><option value="HK">港股</option><option value="KS">韩股</option>
+          </select>
+          <select id="status-filter" class="filter-select" aria-label="筛选状态">
+            <option value="ALL">全部状态</option><option value="CORE">核心观察</option><option value="PENDING">待核验</option><option value="REJECTED">已排除</option><option value="OUTSIDE_SCOPE">市场未覆盖</option>
+          </select>
+          <input id="search-input" class="search-input" type="search" placeholder="搜索名称或代码" aria-label="搜索名称或代码">
+        </div>
+        <div id="candidate-result-count" class="result-count"></div>
+      </div>
+      <div class="content-grid">
+        <section class="list-column" aria-label="候选证券">
+          <div class="table-frame">
+            <table class="candidate-table">
+              <thead><tr><th>证券</th><th>状态</th><th>市值</th><th>PE (TTM)</th><th>PEG</th><th>行情日期</th></tr></thead>
+              <tbody id="candidate-rows"></tbody>
+            </table>
+          </div>
+        </section>
+        <aside id="detail-panel" class="detail-column" aria-label="证券详情"></aside>
+      </div>
+    </section>
+
+    <section id="reports-view" hidden>
+      <div class="toolbar">
+        <div class="filters">
+          <select id="report-market-filter" class="filter-select" aria-label="研报市场">
+            <option value="ALL">全部市场</option><option value="A">A 股</option><option value="HK">港股</option><option value="KS">韩股</option>
+          </select>
+          <input id="report-search-input" class="search-input" type="search" placeholder="搜索公司、代码或研报标题" aria-label="搜索研报">
+        </div>
+        <div id="report-result-count" class="result-count"></div>
+      </div>
+      <div class="table-frame">
+        <table class="report-table">
+          <thead><tr><th>报告日期</th><th>公司</th><th>市场</th><th>研究报告</th><th>筛选状态</th><th>查看</th></tr></thead>
+          <tbody id="report-rows"></tbody>
+        </table>
+      </div>
+    </section>
+    <section id="history-view" hidden>
+      <div class="history-layout">
+        <section aria-label="历史构建列表">
+          <div class="table-frame">
+            <table class="history-table">
+              <thead><tr><th>构建时间</th><th>数据模式</th><th>候选</th><th>核心</th><th>核心进出</th></tr></thead>
+              <tbody id="history-rows"></tbody>
+            </table>
+          </div>
+        </section>
+        <aside id="history-detail" class="detail-column" aria-label="历史构建详情"><div class="empty-state">尚无历史构建记录</div></aside>
+      </div>
+    </section>
+    <footer class="page-footer">研究数据以研报原文及所示行情日期为准。缺失字段保持待核验状态。</footer>
+  </main>
+  </div>
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script>
+    const STATUS = {
+      CORE: ["核心观察", "CORE"],
+      PENDING: ["待核验", "PENDING"],
+      REJECTED: ["已排除", "REJECTED"],
+      OUTSIDE_SCOPE: ["市场未覆盖", "OUTSIDE_SCOPE"]
+    };
+    const state = { data: null, health: null, history: [], selectedCode: null, selectedBuildId: null, view: "watchlist", toastTimer: null };
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
+    const fmt = (value, digits = 2) => value === null || value === undefined || !Number.isFinite(Number(value)) ? "待补" : Number(value).toFixed(digits);
+    const marketName = (market) => ({SH:"沪市",SZ:"深市",BJ:"北交所",HK:"港股",KS:"韩股"}[market] || market || "未知");
+    const statusName = (status) => (STATUS[status] || ["待核验", "PENDING"])[0];
+    const statusTag = (status) => `<span class="status-tag ${esc(STATUS[status]?.[1] || "PENDING")}">${esc(statusName(status))}</span>`;
+    const capText = (value) => value == null ? "待补" : `${fmt(value, 1)} 亿`;
+    const linkForReport = (name) => `/api/reports/${encodeURIComponent(name || "")}`;
+
+    function showToast(message, bad = false) {
+      const toast = $("toast");
+      toast.textContent = message;
+      toast.style.background = bad ? "#60312e" : "#1c4937";
+      toast.hidden = false;
+      clearTimeout(state.toastTimer);
+      state.toastTimer = setTimeout(() => { toast.hidden = true; }, 4200);
+    }
+
+    async function loadState() {
+      const [healthResponse, dataResponse, historyResponse] = await Promise.all([fetch("/api/health"), fetch("/api/watchlist"), fetch("/api/history")]);
+      if (!healthResponse.ok || !dataResponse.ok || !historyResponse.ok) throw new Error("服务未能读取观察池数据");
+      state.health = await healthResponse.json();
+      state.data = await dataResponse.json();
+      state.history = (await historyResponse.json()).builds || [];
+      if (!state.history.some((build) => build.build_id === state.selectedBuildId)) state.selectedBuildId = state.history[0]?.build_id || null;
+      renderAll();
+    }
+
+    function renderStatus() {
+      const health = state.health || {};
+      const latest = health.latest_quote_date ? `最近行情 ${health.latest_quote_date}` : "没有可用行情日期";
+      const age = health.quote_age_days == null ? "" : `，距今 ${health.quote_age_days} 天`;
+      const dataMode = health.market_data_mode || "未构建";
+      $("top-data-mode").textContent = dataMode;
+      $("top-updated").textContent = health.generated_at ? `更新于 ${health.generated_at}` : "尚无构建记录";
+      const issues = [];
+      if (!health.tushare_configured) issues.push("未配置 Tushare Token");
+      if (!health.llm_configured) issues.push("未配置 AI 模型");
+      if (health.llm_endpoint_blocked) issues.push("模型 HTTP 地址已阻止");
+      if (health.quote_age_days != null && health.quote_age_days > 3) issues.push("行情已过期");
+      if (health.report_issue_count) issues.push(`${health.report_issue_count} 份研报处理异常`);
+      const strip = $("status-strip");
+      strip.classList.toggle("good", issues.length === 0);
+      $("status-title").textContent = issues.length ? issues.join(" · ") : "数据接入状态正常";
+      $("status-detail").textContent = `${latest}${age}。面板只展示最近一次成功构建的数据。`;
+      const modelStatus = `${health.llm_model || "AI 模型"} · ${health.llm_configured ? (health.llm_wire_api || "responses") : "未配置密钥"}`;
+      $("status-badges").innerHTML = `<span>${health.tushare_configured ? "Tushare 已配置" : "Tushare 未配置"}</span><span aria-hidden="true">·</span><span>${esc(modelStatus)}</span>`;
+      if (state.view === "watchlist") $("page-subtitle").textContent = `数据日 ${health.latest_quote_date || "待补"} · ${state.data?.candidates?.length || 0} 只研报候选`;
+    }
+
+    function renderMetrics() {
+      const candidates = state.data?.candidates || [];
+      const reports = state.data?.report_count ?? candidates.reduce((sum, item) => sum + (item.reports || []).length, 0);
+      const count = (status) => candidates.filter((item) => item.status === status).length;
+      const values = [
+        ["核心观察", count("CORE"), "全部硬筛通过", "green"],
+        ["待核验", count("PENDING"), "数据或研报证据待补", "amber"],
+        ["已排除", count("REJECTED"), "命中排除规则", "red"],
+        ["研报", reports, "纳入报告库", ""]
+      ];
+      $("metrics").innerHTML = values.map(([label, value, note, color]) => `<div class="metric"><div class="metric-label">${esc(label)}</div><div class="metric-value ${color}">${esc(value)}</div><div class="metric-note">${esc(note)}</div></div>`).join("");
+      $("candidate-tab-count").textContent = `(${candidates.length})`;
+      $("report-tab-count").textContent = `(${reports})`;
+      $("history-tab-count").textContent = `(${state.history.length})`;
+    }
+
+    function renderWorkflow() {
+      const data = state.data || {};
+      const health = state.health || {};
+      const candidates = data.candidates || [];
+      const count = (status) => candidates.filter((item) => item.status === status).length;
+      const linkedReportCount = candidates.reduce((sum, item) => sum + (item.reports || []).length, 0);
+      const reportCount = Number(data.report_count ?? health.report_count ?? 0) || linkedReportCount;
+      const textCount = data.report_text_count ?? reportCount;
+      const inferredAiCount = candidates.filter((item) => item.summary?.summary_mode === "ai").length;
+      const aiCount = Number(data.report_ai_count ?? health.report_ai_count ?? 0) || inferredAiCount;
+      const issueCount = data.report_issue_count ?? health.report_issue_count ?? 0;
+      const quoteFreshCount = data.fresh_quote_count ?? candidates.filter((item) => item.technical?.status === "fresh").length;
+      const coreCount = count("CORE");
+      const pendingCount = count("PENDING");
+      const rejectedCount = count("REJECTED");
+      const outsideCount = count("OUTSIDE_SCOPE");
+      const totalCandidates = candidates.length;
+      const generatedAt = data.generated_at || health.generated_at;
+      const modelReady = health.llm_configured && !health.llm_endpoint_blocked;
+      const stages = [
+        { title: "研报入库", value: `${reportCount} 份`, detail: "PDF 研究来源", status: reportCount ? "已载入" : "未运行", state: reportCount ? "done" : "wait" },
+        { title: "文本 / AI 归纳", value: `${aiCount} / ${textCount}`, detail: issueCount ? `${issueCount} 份处理异常` : modelReady ? "AI 摘要已缓存" : "规则摘录 / 待 AI", status: issueCount || !modelReady ? "需关注" : "完成", state: issueCount || !modelReady ? "warn" : "done" },
+        { title: "行情校验", value: `${quoteFreshCount} 只新鲜`, detail: `${health.latest_quote_date || "行情待补"} · ${data.market_data_mode || health.market_data_mode || "未构建"}`, status: health.quote_age_days > 3 || !health.tushare_configured ? "需关注" : "完成", state: health.latest_quote_date ? (health.quote_age_days > 3 || !health.tushare_configured ? "warn" : "done") : "wait" },
+        { title: "筛选 / 估值", value: `${coreCount} 只核心`, detail: `${pendingCount} 待核 · ${rejectedCount} 排除`, status: totalCandidates ? (pendingCount ? "待核验" : "已完成") : "未运行", state: totalCandidates ? (pendingCount ? "warn" : "done") : "wait" },
+        { title: "观察池产出", value: generatedAt || "尚未构建", detail: `${totalCandidates} 只候选 · MD / JSON`, status: generatedAt ? "已生成" : "待生成", state: generatedAt ? "done" : "wait" }
+      ];
+      $("workflow-flow").innerHTML = stages.map((stage, index) => `<li class="flow-step" data-state="${stage.state}">
+        <span class="flow-head"><span class="flow-marker">${String(index + 1).padStart(2, "0")}</span><span class="flow-state">${esc(stage.status)}</span></span>
+        <span class="flow-title">${esc(stage.title)}</span><strong class="flow-value">${esc(stage.value)}</strong><span class="flow-detail">${esc(stage.detail)}</span>
+      </li>`).join("");
+      $("workflow-run-meta").textContent = generatedAt ? `构建日 ${generatedAt} · 行情日 ${health.latest_quote_date || "待补"}` : "等待构建记录";
+      $("distribution-total").textContent = `${totalCandidates} 只证券`;
+      const distribution = [
+        ["CORE", "核心观察", coreCount],
+        ["PENDING", "待核验", pendingCount],
+        ["REJECTED", "已排除", rejectedCount],
+        ["OUTSIDE_SCOPE", "市场未覆盖", outsideCount]
+      ];
+      $("funnel-track").setAttribute("aria-label", distribution.map(([, label, value]) => `${label} ${value}只`).join("，"));
+      $("funnel-track").innerHTML = distribution.map(([key, , value]) => `<span class="funnel-segment ${key}" style="width:${totalCandidates ? (value / totalCandidates) * 100 : 0}%"></span>`).join("");
+      $("funnel-legend").innerHTML = distribution.map(([key, label, value]) => `<span class="legend-item"><i class="legend-dot ${key}" aria-hidden="true"></i>${label} ${value}</span>`).join("");
+    }
+
+    function visibleCandidates() {
+      const marketFilter = $("market-filter").value;
+      const statusFilter = $("status-filter").value;
+      const needle = $("search-input").value.trim().toLowerCase();
+      return (state.data?.candidates || []).filter((item) => {
+        const isA = ["SH", "SZ", "BJ"].includes(item.market);
+        const marketOk = marketFilter === "ALL" || (marketFilter === "A" ? isA : item.market === marketFilter);
+        const statusOk = statusFilter === "ALL" || item.status === statusFilter;
+        const text = `${item.company} ${item.code}`.toLowerCase();
+        return marketOk && statusOk && (!needle || text.includes(needle));
+      });
+    }
+
+    function renderCandidateRows() {
+      const candidates = visibleCandidates();
+      $("candidate-result-count").textContent = `${candidates.length} 个结果`;
+      if (!candidates.length) {
+        $("candidate-rows").innerHTML = `<tr><td colspan="6" class="empty-state">没有符合当前筛选条件的标的</td></tr>`;
+        $("detail-panel").innerHTML = `<div class="empty-state">选择一只证券查看研究详情</div>`;
+        return;
+      }
+      if (!candidates.some((item) => item.code === state.selectedCode)) state.selectedCode = candidates[0].code;
+      $("candidate-rows").innerHTML = candidates.map((item) => {
+        const ratios = item.valuation?.ratios || {};
+        const quote = item.quote || {};
+        const date = item.technical?.quote_date || "待补";
+        return `<tr class="candidate-row ${item.code === state.selectedCode ? "selected" : ""}" data-code="${esc(item.code)}" tabindex="0" aria-selected="${item.code === state.selectedCode}">
+          <td><span class="security-name">${esc(item.company)}</span><span class="security-code">${esc(item.code)} · ${esc(marketName(item.market))}</span></td>
+          <td>${statusTag(item.status)}</td>
+          <td class="numeric">${esc(capText(quote.market_cap_yi))}</td>
+          <td class="numeric">${esc(ratios.pe_ttm == null ? "待补" : `${fmt(ratios.pe_ttm, 1)}x`)}</td>
+          <td class="numeric">${esc(fmt(ratios.peg, 2))}</td>
+          <td class="numeric">${esc(date)}</td>
+        </tr>`;
+      }).join("");
+      renderDetail(candidates.find((item) => item.code === state.selectedCode));
+    }
+
+    function metricBox(label, value) {
+      return `<div class="inline-metric"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
+    }
+
+    function evidenceLine(summary) {
+      const order = summary.orders || {};
+      const financial = summary.financial_evidence || {};
+      const items = [];
+      if (order.quote) {
+        const state = order.confirmed && order.source_verified ? "订单确认且原文核验通过" : order.source_verified ? "原文可查，订单状态未确认" : "引用尚未核验";
+        items.push(`${state}：${order.quote}${order.page ? `（第 ${order.page} 页）` : ""}`);
+      }
+      if (financial.quote) {
+        const state = financial.confirmed && financial.fact_type === "reported_actual" && financial.source_verified ? "已披露实绩且原文核验通过" : "非已核验实绩";
+        items.push(`${state}：${financial.quote}${financial.page ? `（第 ${financial.page} 页）` : ""}`);
+      }
+      return items.length ? items.join("；") : "尚未提取可核验的订单或财务证据";
+    }
+
+    function renderScenario(candidate) {
+      const scenario = candidate.valuation?.scenario || {};
+      const values = scenario.scenarios || {};
+      if (scenario.status !== "calculated") return `<div class="empty-state">缺少未来 EPS 预测或正向增速，暂不外推估值</div>`;
+      const entries = [["保守", values.bear], ["基准", values.base], ["乐观", values.bull]];
+      return `<table class="scenario-table"><thead><tr><th>情景</th><th>估值区间</th><th>对应 PE</th></tr></thead><tbody>${entries.filter(([,v]) => v).map(([label, v]) => `<tr><td>${esc(label)}</td><td>${fmt(v.low)}-${fmt(v.high)} 元</td><td>${fmt(v.pe_low, 1)}-${fmt(v.pe_high, 1)}x</td></tr>`).join("")}</tbody></table><div class="metric-note">${esc(scenario.forecast_year)}E EPS ${fmt(scenario.eps)} 元 · EPS 增速 ${fmt(scenario.growth_pct, 1)}% · 折现率 ${fmt(scenario.discount_rate_pct, 0)}%</div>`;
+    }
+
+    function summaryPendingMessage() {
+      const health = state.health || {};
+      if (!health.llm_configured) return "未配置模型 API Key；当前逻辑来自规则摘录。";
+      if (health.llm_endpoint_blocked) return "模型 Key 已配置，但 HTTP 端点被安全策略阻止；请配置 HTTPS 后重跑 AI 归纳。";
+      if (health.report_issue_count) return "模型已配置，但上次研报归纳存在异常；请查看处理提示后重跑。";
+      return "模型已配置；当前观察池仍是规则摘录结果，需重跑 AI 归纳。";
+    }
+
+    function renderDetail(candidate) {
+      if (!candidate) return;
+      const summary = candidate.summary || {};
+      const quote = candidate.quote || {};
+      const technical = candidate.technical || {};
+      const ratios = candidate.valuation?.ratios || {};
+      const price = quote.price ?? technical.price;
+      const summarizedByAi = summary.summary_mode === "ai";
+      const pendingMessage = summaryPendingMessage();
+      const financeFacts = [
+        [quote.revenue_yoy_pct, "营收同比"], [quote.netprofit_yoy_pct, "净利润同比"],
+        [quote.roe_pct, "ROE"], [quote.gross_margin_pct, "毛利率"]
+      ].filter(([value]) => value != null).map(([value, label]) => `${label} ${fmt(value, 1)}%`);
+      const finance = summarizedByAi
+        ? candidate.financial_quality || "缺少财务质量信息"
+        : `${financeFacts.length ? `最新披露指标：${financeFacts.join("、")}` : "暂无可用财务质量指标。"}`;
+      const risks = summary.risks || [];
+      const riskItems = summarizedByAi && risks.length ? risks : ["自动风险归纳尚未完成，请查看原研报风险提示。"];
+      for (const flag of candidate.report_risk_flags || []) {
+        riskItems.push(`研报退市风险线索：${flag.quote}（${flag.file || "研报"}，第 ${flag.page || "?"} 页）`);
+      }
+      const reports = candidate.reports || [];
+      const trend = technical.trend_ok === true ? "多头排列" : technical.trend_ok === false ? "未形成多头" : "待核验";
+      const ratioRead = ratios.peg == null ? "待补估值数据" : ratios.peg > 2.5 ? "PEG 偏高" : ratios.peg <= 1 ? "PEG 较低" : "需结合情景判断";
+      const sources = reports.map((report) => `<a href="${esc(linkForReport(report.file))}" target="_blank" rel="noopener">${esc(report.date || "日期未知")} · ${esc(report.title || report.file)}（打开 PDF）</a>`).join("");
+      const rejection = [...(candidate.rejection_reasons || []), ...(candidate.pending_reasons || [])];
+      $("detail-panel").innerHTML = `
+        <div class="detail-head">
+          <div><h2 class="detail-name">${esc(candidate.company)} ${statusTag(candidate.status)}</h2><div class="detail-code">${esc(candidate.code)} · ${esc(marketName(candidate.market))}${quote.industry ? ` · ${esc(quote.industry)}` : ""}${quote.industry_rank ? ` · 行业排名 ${esc(fmt(quote.industry_rank, 0))}` : ""}</div></div>
+          <div class="detail-price"><strong>${price == null ? "待补" : `${fmt(price)} 元`}</strong><span>行情日 ${esc(technical.quote_date || "待补")}</span></div>
+        </div>
+        <section class="detail-section"><div class="section-heading"><h3>投资逻辑</h3><span>${summarizedByAi ? "AI 归纳" : (state.health?.llm_endpoint_blocked ? "HTTP 端点受阻" : "待重跑 AI")}</span></div>
+          ${summarizedByAi ? "" : `<p class="summary-pending">${esc(pendingMessage)}</p>`}
+          <div class="logic-label">行业逻辑</div><p class="logic-text">${esc(summarizedByAi ? (summary.industry_logic || "待提取") : "尚未生成行业归纳。")}</p>
+          <div class="logic-label">公司逻辑</div><p class="logic-text">${esc(summarizedByAi ? (summary.company_logic || "待提取") : "尚未生成公司竞争力归纳。")}</p>
+          <div class="logic-label">盈利路径</div><p class="logic-text">${esc(summarizedByAi ? (summary.profit_model || "待提取") : "尚未生成收入与利润驱动归纳。")}</p>
+        </section>
+        <section class="detail-section"><div class="section-heading"><h3>财务与验证</h3><span>${esc(ratioRead)}</span></div>
+          <p class="logic-text">${esc(finance)}</p><div class="logic-label">订单/业绩证据</div><p class="logic-text">${esc(evidenceLine(summary))}</p>
+        </section>
+        <section class="detail-section"><div class="section-heading"><h3>基础估值</h3><span>成长消化估值：${esc(ratioRead)}</span></div>
+          <div class="inline-metrics">${metricBox("PE (TTM)", ratios.pe_ttm == null ? "待补" : `${fmt(ratios.pe_ttm, 1)}x`)}${metricBox("PB", ratios.pb == null ? "待补" : `${fmt(ratios.pb, 2)}x`)}${metricBox("PS (TTM)", ratios.ps_ttm == null ? "待补" : `${fmt(ratios.ps_ttm, 2)}x`)}${metricBox("PEG", fmt(ratios.peg, 2))}</div>
+          ${renderScenario(candidate)}
+        </section>
+        <section class="detail-section"><div class="section-heading"><h3>技术状态</h3><span>${esc(technical.status === "fresh" ? "行情有效" : technical.status === "stale" ? "行情已过期" : "行情待补")}</span></div>
+          <div class="tech-grid">
+            <div class="tech-item"><span>趋势</span><span>${esc(trend)}</span></div><div class="tech-item"><span>换手率</span><span>${esc(technical.turnover_rate_pct == null ? "待补" : `${fmt(technical.turnover_rate_pct)}%`)}</span></div>
+            <div class="tech-item"><span>MA5 / 20 / 60</span><span>${esc([technical.ma5, technical.ma20, technical.ma60].map((v) => fmt(v)).join(" / "))}</span></div><div class="tech-item"><span>5/20 日均量比</span><span>${esc(fmt(technical.volume_ratio_5d_20d))}</span></div>
+            <div class="tech-item"><span>20 日平均成交额</span><span>${esc(technical.avg_amount_20d_yi == null ? "待补" : `${fmt(technical.avg_amount_20d_yi)} 亿元`)}</span></div><div class="tech-item"><span>5/20 日均成交额比</span><span>${esc(fmt(technical.amount_ratio_5d_20d))}</span></div>
+            <div class="tech-item"><span>近 5 日涨幅</span><span>${esc(technical.return_5d_pct == null ? "待补" : `${fmt(technical.return_5d_pct)}%`)}</span></div><div class="tech-item"><span>量价异常</span><span>${technical.high_volume_stall ? "高位放量滞涨" : technical.no_volume_rise ? "缩量上涨" : "未触发"}</span></div>
+          </div>
+        </section>
+        <section class="detail-section"><div class="section-heading"><h3>主要风险</h3></div><ul class="risk-list">${riskItems.map((risk) => `<li>${esc(risk)}</li>`).join("")}</ul></section>
+        <section class="detail-section"><div class="section-heading"><h3>入池状态</h3></div><ul class="risk-list">${rejection.length ? rejection.map((reason) => `<li>${esc(reason)}</li>`).join("") : "<li>已满足当前筛选条件</li>"}</ul></section>
+        <section class="detail-section"><div class="section-heading"><h3>研报来源</h3></div><div class="source-list">${sources || "<span class='metric-note'>没有关联研报</span>"}</div></section>`;
+    }
+
+    function allReports() {
+      const result = [];
+      for (const candidate of state.data?.candidates || []) {
+        for (const report of candidate.reports || []) result.push({ ...report, code: candidate.code, company: candidate.company, market: candidate.market, status: candidate.status });
+      }
+      return result.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    }
+
+    function renderReports() {
+      const market = $("report-market-filter").value;
+      const needle = $("report-search-input").value.trim().toLowerCase();
+      const rows = allReports().filter((report) => {
+        const isA = ["SH", "SZ", "BJ"].includes(report.market);
+        const marketOk = market === "ALL" || (market === "A" ? isA : report.market === market);
+        const haystack = `${report.company} ${report.code} ${report.title} ${report.file}`.toLowerCase();
+        return marketOk && (!needle || haystack.includes(needle));
+      });
+      $("report-result-count").textContent = `${rows.length} 份报告`;
+      $("report-rows").innerHTML = rows.length ? rows.map((report) => `<tr>
+        <td class="numeric">${esc(report.date || "待补")}</td><td><span class="security-name">${esc(report.company)}</span><span class="security-code">${esc(report.code)}</span></td>
+        <td>${esc(marketName(report.market))}</td><td class="report-title">${esc(report.title || "研究报告")}<small>${esc(report.file)}</small></td>
+        <td>${statusTag(report.status)}</td><td><a class="pdf-link" href="${esc(linkForReport(report.file))}" target="_blank" rel="noopener">打开 PDF</a></td>
+      </tr>`).join("") : `<tr><td colspan="6" class="empty-state">没有匹配的研报</td></tr>`;
+    }
+
+    function buildTimeLabel(value) {
+      if (!value) return "时间未知";
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("zh-CN", {hour12:false});
+    }
+
+    function historyStatusLabel(status) {
+      return status ? statusName(status) : "未纳入候选";
+    }
+
+    function historyDelta(current, previous, digits = 2, percent = false) {
+      if (current == null || previous == null || !Number.isFinite(Number(current)) || !Number.isFinite(Number(previous))) return "无对照";
+      const change = percent
+        ? (Number(previous) === 0 ? null : (Number(current) / Number(previous) - 1) * 100)
+        : Number(current) - Number(previous);
+      if (change == null || !Number.isFinite(change)) return "无对照";
+      return `${change > 0 ? "+" : ""}${change.toFixed(digits)}${percent ? "%" : ""}`;
+    }
+
+    function renderHistory() {
+      const builds = state.history || [];
+      if (!builds.length) {
+        $("history-rows").innerHTML = `<tr><td colspan="5" class="empty-state">尚无历史构建记录</td></tr>`;
+        $("history-detail").innerHTML = `<div class="empty-state">完成一次构建后，这里会保留候选快照和状态变化</div>`;
+        return;
+      }
+      $("history-rows").innerHTML = builds.map((build) => {
+        const changes = build.changes || {};
+        const entered = changes.core_entered?.length || 0;
+        const exited = changes.core_exited?.length || 0;
+        const counts = build.status_counts || {};
+        return `<tr class="history-row ${build.build_id === state.selectedBuildId ? "selected" : ""}" data-build-id="${esc(build.build_id)}" tabindex="0" aria-selected="${build.build_id === state.selectedBuildId}">
+          <td class="numeric">${esc(buildTimeLabel(build.built_at))}<span class="history-sub">数据日 ${esc(build.generated_at || "待补")}</span></td>
+          <td>${esc(build.market_data_mode || "未知")}</td><td class="numeric">${esc(build.candidate_count ?? 0)}</td>
+          <td class="numeric">${esc(counts.CORE ?? 0)}</td><td class="numeric">+${entered} / -${exited}</td>
+        </tr>`;
+      }).join("");
+
+      const build = builds.find((item) => item.build_id === state.selectedBuildId) || builds[0];
+      state.selectedBuildId = build.build_id;
+      const buildIndex = builds.findIndex((item) => item.build_id === build.build_id);
+      const previousBuild = builds[buildIndex + 1];
+      const previousCandidates = new Map((previousBuild?.candidates || []).map((item) => [item.code, item]));
+      const changes = build.changes || {};
+      const counts = build.status_counts || {};
+      const changeItems = changes.status_changes || [];
+      const entries = changes.core_entered || [];
+      const exits = changes.core_exited || [];
+      const changeLines = changeItems.length
+        ? changeItems.map((item) => `<li>${esc(item.company)}（${esc(item.code)}）：${esc(historyStatusLabel(item.from_status))} → ${esc(historyStatusLabel(item.to_status))}</li>`).join("")
+        : `<li>${changes.available ? "候选状态没有变化" : "这是首条留存记录，没有更早的构建可比较"}</li>`;
+      const coreLines = [
+        ...entries.map((item) => `<li>新增 ${esc(item.company)}（${esc(item.code)}），原状态 ${esc(historyStatusLabel(item.from_status))}</li>`),
+        ...exits.map((item) => `<li>移出 ${esc(item.company)}（${esc(item.code)}），现状态 ${esc(historyStatusLabel(item.to_status))}</li>`)
+      ];
+      const candidates = build.candidates || [];
+      const candidateRows = candidates.length ? candidates.map((item) => {
+        const reasons = item.reasons || [];
+        const previous = previousCandidates.get(item.code);
+        return `<tr><td><span class="security-name">${esc(item.company)}</span><span class="security-code">${esc(item.code)} · ${esc(marketName(item.market))}</span></td>
+          <td>${statusTag(item.status)}</td><td class="numeric">${item.price == null ? "待补" : `${fmt(item.price)} 元`}<span class="history-sub">较上次 ${historyDelta(item.price, previous?.price, 2, true)}</span></td>
+          <td class="numeric">${fmt(item.peg, 2)}<span class="history-sub">较上次 ${historyDelta(item.peg, previous?.peg)}</span></td><td class="numeric">${esc(item.quote_date || "待补")}</td>
+          <td class="history-reason" title="${esc(reasons.join("；"))}">${esc(reasons.slice(0, 2).join("；") || "无")}</td></tr>`;
+      }).join("") : `<tr><td colspan="6" class="empty-state">该次构建没有候选</td></tr>`;
+      $("history-detail").innerHTML = `
+        <div class="detail-head"><div><h2 class="detail-name">构建详情</h2><div class="detail-code">${esc(buildTimeLabel(build.built_at))} · 数据日 ${esc(build.generated_at || "待补")}</div></div><div class="detail-price"><strong>${esc(build.market_data_mode || "未知")}</strong><span>${esc(build.report_count ?? 0)} 份研报</span></div></div>
+        <div class="history-counts"><div class="history-count"><span>核心观察</span><strong>${esc(counts.CORE ?? 0)}</strong></div><div class="history-count"><span>待核验</span><strong>${esc(counts.PENDING ?? 0)}</strong></div><div class="history-count"><span>已排除</span><strong>${esc(counts.REJECTED ?? 0)}</strong></div><div class="history-count"><span>市场未覆盖</span><strong>${esc(counts.OUTSIDE_SCOPE ?? 0)}</strong></div></div>
+        <section class="detail-section"><div class="section-heading"><h3>核心观察池变化</h3><span>+${entries.length} / -${exits.length}</span></div><ul class="change-list">${coreLines.length ? coreLines.join("") : `<li>${changes.available ? "核心观察池没有变化" : "首次留存构建"}</li>`}</ul></section>
+        <section class="detail-section"><div class="section-heading"><h3>候选状态变化</h3><span>${changeItems.length} 只</span></div><ul class="change-list">${changeLines}</ul></section>
+        <section class="detail-section"><div class="section-heading"><h3>候选快照</h3><span>${previousBuild ? "数值与前次构建比较" : "无更早构建可比较"}</span></div><div class="table-frame"><table class="history-detail-table"><thead><tr><th>证券</th><th>状态</th><th>现价 / 涨跌</th><th>PEG / 变动</th><th>行情日</th><th>状态原因</th></tr></thead><tbody>${candidateRows}</tbody></table></div></section>`;
+    }
+
+    function setView(view) {
+      state.view = view;
+      const views = ["watchlist", "reports", "history"];
+      for (const name of views) {
+        $(`${name}-view`).hidden = name !== view;
+        if (name === view) $(`tab-${name}`).setAttribute("aria-current", "page");
+        else $(`tab-${name}`).removeAttribute("aria-current");
+      }
+      $("page-title").textContent = {watchlist:"核心观察池", reports:"研报库", history:"构建历史"}[view];
+      if (view === "reports") $("page-subtitle").textContent = `${state.data?.report_count ?? 0} 份研报 · 当前筛选结果`;
+      if (view === "history") $("page-subtitle").textContent = `${state.history.length} 次成功构建 · 最多保留 365 次`;
+    }
+
+    function renderAll() {
+      renderStatus();
+      renderMetrics();
+      renderWorkflow();
+      renderCandidateRows();
+      renderReports();
+      renderHistory();
+      setView(state.view);
+    }
+
+    async function refreshBuild() {
+      const button = $("refresh-button");
+      button.disabled = true;
+      button.textContent = "正在构建...";
+      try {
+        const response = await fetch("/api/refresh", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({offline:false, refresh_ai:$("refresh-ai").checked})
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || "构建失败");
+        state.selectedBuildId = null;
+        await loadState();
+        showToast(payload.report_issues?.length ? `观察池已更新；${payload.report_issues.length} 份研报需处理` : "观察池已更新");
+      } catch (error) {
+        showToast(error.message || "构建失败", true);
+      } finally {
+        button.disabled = false;
+        button.textContent = "重新构建";
+      }
+    }
+
+    $("candidate-rows").addEventListener("click", (event) => {
+      const row = event.target.closest("tr[data-code]");
+      if (!row) return;
+      state.selectedCode = row.dataset.code;
+      renderCandidateRows();
+    });
+    $("candidate-rows").addEventListener("keydown", (event) => {
+      const row = event.target.closest("tr[data-code]");
+      if (row && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        state.selectedCode = row.dataset.code;
+        renderCandidateRows();
+      }
+    });
+    for (const id of ["market-filter", "status-filter"]) $(id).addEventListener("change", renderCandidateRows);
+    $("search-input").addEventListener("input", renderCandidateRows);
+    $("report-market-filter").addEventListener("change", renderReports);
+    $("report-search-input").addEventListener("input", renderReports);
+    $("history-rows").addEventListener("click", (event) => {
+      const row = event.target.closest("tr[data-build-id]");
+      if (!row) return;
+      state.selectedBuildId = row.dataset.buildId;
+      renderHistory();
+    });
+    $("history-rows").addEventListener("keydown", (event) => {
+      const row = event.target.closest("tr[data-build-id]");
+      if (row && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        state.selectedBuildId = row.dataset.buildId;
+        renderHistory();
+      }
+    });
+    $("tab-watchlist").addEventListener("click", (event) => { event.preventDefault(); setView("watchlist"); });
+    $("tab-reports").addEventListener("click", (event) => { event.preventDefault(); setView("reports"); });
+    $("tab-history").addEventListener("click", (event) => { event.preventDefault(); setView("history"); });
+    $("refresh-button").addEventListener("click", refreshBuild);
+
+    loadState().catch((error) => {
+      $("status-title").textContent = "服务暂不可用";
+      $("status-detail").textContent = error.message || "请确认 FastAPI 服务已启动。";
+      showToast("读取数据失败", true);
+    });
+  </script>
+</body>
+</html>
