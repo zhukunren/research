@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
@@ -21,7 +22,8 @@ ROOT_DIR = Path(__file__).resolve().parent
 WEB_DIR = ROOT_DIR / "web"
 BUILD_LOCK = threading.Lock()
 
-app = FastAPI(title="投研观察池", docs_url="/api/docs", redoc_url=None)
+app = FastAPI(title="投研研究终端", docs_url="/api/docs", redoc_url=None)
+app.mount("/assets", StaticFiles(directory=WEB_DIR), name="assets")
 
 
 class BuildRequest(BaseModel):
@@ -106,6 +108,30 @@ def health():
 @app.get("/api/watchlist")
 def watchlist():
     return _load_result()
+
+
+@app.get("/api/validation")
+def forward_validation():
+    settings = load_settings()
+    path = Path(settings["paths"]["output_dir"]) / "forward_validation.json"
+    if not path.exists():
+        configured = settings.get("validation", {})
+        return {
+            "measurement": "signal-day close to Nth subsequent trading-day close; research validation, not executable backtest",
+            "history_build_count": 0,
+            "horizons": configured.get("horizons", [5, 20, 60]),
+            "benchmark_codes": configured.get("benchmark_codes", []),
+            "matured_record_count": 0,
+            "summary": [],
+            "records": [],
+        }
+    try:
+        result = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=500, detail=f"前瞻验证结果读取失败：{type(exc).__name__}") from exc
+    if not isinstance(result, dict):
+        raise HTTPException(status_code=500, detail="前瞻验证结果格式无效")
+    return result
 
 
 @app.get("/api/history")
