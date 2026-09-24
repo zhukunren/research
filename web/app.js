@@ -551,7 +551,6 @@ function setView(view) {
   state.view = view;
   const views = ["watchlist", "reports", "history", "validation"];
   for (const name of views) {
-    $("${name}-view");
     const section = $(`${name}-view`);
     const tab = $(`tab-${name}`);
     section.hidden = name !== view;
