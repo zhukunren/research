@@ -93,6 +93,8 @@ def create_history_snapshot(result: dict) -> dict:
         technical = item.get("technical", {}) or {}
         quote = item.get("quote", {}) or {}
         base = (valuation.get("scenario", {}) or {}).get("scenarios", {}).get("base", {}) or {}
+        scenario = valuation.get("scenario", {}) or {}
+        rank = item.get("industry_rank_assessment", {}) or {}
         candidates.append({
             "code": item.get("code"),
             "company": item.get("company"),
@@ -101,6 +103,10 @@ def create_history_snapshot(result: dict) -> dict:
             "price": technical.get("price", quote.get("price")),
             "quote_date": technical.get("quote_date"),
             "peg": (valuation.get("ratios", {}) or {}).get("peg"),
+            "growth_pct": scenario.get("growth_pct"),
+            "growth_span_years": scenario.get("growth_span_years"),
+            "industry_rank": rank.get("rank"),
+            "industry_rank_basis": rank.get("basis"),
             "base_value_low": base.get("low"),
             "base_value_high": base.get("high"),
             "reasons": (item.get("rejection_reasons", []) + item.get("pending_reasons", []))[:6],
@@ -128,11 +134,14 @@ def _fmt(value, suffix="", digits=2):
 def _scenario_lines(candidate: dict) -> list[str]:
     scenario = candidate["valuation"]["scenario"]
     if scenario.get("status") != "calculated":
-        return ["- 情景估值：缺少至少两年可比未来 EPS 预测或正向 EPS 增速，暂不外推。"]
+        return ["- 情景估值：缺少满足最小跨度要求、可核验且正向的未来 EPS CAGR，暂不外推。"]
     quote = candidate.get("quote", {})
     price = quote.get("price")
     lines = [
-        f"- 情景估值：以 {scenario['forecast_year']} 年 EPS {_fmt(scenario['eps'])} 元、EPS 增速 {_fmt(scenario['growth_pct'], '%')}、PEG 情景倍数、折现率 {_fmt(scenario['discount_rate_pct'], '%')} 折现 {scenario['discount_years']} 年计算。"
+        f"- 情景估值：以 {scenario.get('growth_start_year')}E EPS {_fmt(scenario.get('growth_start_eps'))} 元至 "
+        f"{scenario['forecast_year']}E EPS {_fmt(scenario['eps'])} 元的 {scenario.get('growth_span_years')} 年 CAGR "
+        f"{_fmt(scenario['growth_pct'], '%')} 作为成长率，结合 PEG 情景倍数，并按折现率 "
+        f"{_fmt(scenario['discount_rate_pct'], '%')} 折现 {scenario['discount_years']} 年计算。"
     ]
     technical = candidate.get("technical", {}) or {}
     labels = (("bear", "保守"), ("base", "基准"), ("bull", "乐观"))
@@ -160,7 +169,12 @@ def _candidate_section(candidate: dict) -> str:
     ratios = valuation.get("ratios", {})
     lines = [f"### {candidate['company']}（{candidate['code']}）- {status}"]
     if quote.get("industry"):
-        lines.append(f"- 行业/龙头位置：{quote['industry']}；行业市值排名 {_fmt(quote.get('industry_rank'), ' 名', 0)}；总市值 {_fmt(quote.get('market_cap_yi'), ' 亿元', 1)}。")
+        rank = candidate.get("industry_rank_assessment", {}) or {}
+        basis = "已核验细分行业" if rank.get("basis") == "verified_subindustry" else "Tushare 宽口径行业（参考）"
+        lines.append(
+            f"- 行业/龙头位置：{quote['industry']}；{basis}排名 {_fmt(rank.get('rank'), ' 名', 0)}；"
+            f"总市值 {_fmt(quote.get('market_cap_yi'), ' 亿元', 1)}。"
+        )
     lines.append(f"- 行业逻辑：{summary.get('industry_logic') or '研报中未提取到行业逻辑。'}")
     lines.append(f"- 公司逻辑：{summary.get('company_logic') or '研报中未提取到公司核心逻辑。'}")
     lines.append(f"- 盈利路径：{summary.get('profit_model') or '研报中未提取到明确的收入/利润驱动。'}")
@@ -232,6 +246,9 @@ def _candidate_section(candidate: dict) -> str:
             formatted_quotes.append(f"{topic}第 {page} 页：{item['quote']}")
         if formatted_quotes:
             lines.append(f"- 原文证据：{'；'.join(formatted_quotes)}")
+    notes = candidate.get("research_notes", []) or []
+    if notes:
+        lines.append(f"- 研究备注：{'；'.join(notes)}。")
     reasons = candidate.get("rejection_reasons", []) + candidate.get("pending_reasons", [])
     if reasons:
         lines.append(f"- 状态原因：{'；'.join(reasons)}。")
@@ -260,7 +277,7 @@ def render_markdown(result: dict, reports: list[dict]) -> str:
         "",
         f"生成日期：{generated}；数据模式：{mode}；识别研报：{len(reports)} 份；A 股候选：{len(core) + len(pending) + len(rejected)} 只。",
         f"构建时间：{result.get('built_at', '未知')}；构建编号：{result.get('build_id', '未知')}。",
-        f"筛选门槛：总市值 ≥ {criteria.get('min_market_cap_yi', '待核验')} 亿元；行业市值排名前 {criteria.get('industry_leader_rank_max', '待核验')}；PEG ≤ {criteria.get('max_peg_for_core', '待核验')}；新鲜现价不高于基准估值上沿；行情不超过 {criteria.get('max_quote_age_days', '待核验')} 天；20 日平均成交额 ≥ {criteria.get('min_avg_amount_20d_yi', '待核验')} 亿元、5/20 日均成交额比 ≥ {criteria.get('min_amount_ratio_5d_20d', '待核验')}、5/20 日均量比 {volume_range[0]}-{volume_range[1]}、换手率 {turnover_range[0]}%-{turnover_range[1]}%；订单/实绩证据和技术信号均需可核验。",
+        f"筛选门槛：总市值 ≥ {criteria.get('min_market_cap_yi', '待核验')} 亿元；Tushare 宽口径行业排名默认仅作参考，只有 settings.yml 中已核验的细分行业排名才按前 {criteria.get('industry_leader_rank_max', '待核验')} 名执行硬过滤；PEG ≤ {criteria.get('max_peg_for_core', '待核验')}；EPS 成长率使用至少 {criteria.get('min_growth_span_years', '待核验')} 年、至多 {criteria.get('max_growth_span_years', '待核验')} 年的已核验预测 CAGR；新鲜现价不高于基准估值上沿；行情不超过 {criteria.get('max_quote_age_days', '待核验')} 天；20 日平均成交额 ≥ {criteria.get('min_avg_amount_20d_yi', '待核验')} 亿元、5/20 日均成交额比 ≥ {criteria.get('min_amount_ratio_5d_20d', '待核验')}、5/20 日均量比 {volume_range[0]}-{volume_range[1]}、换手率 {turnover_range[0]}%-{turnover_range[1]}%；订单/实绩证据和技术信号均需可核验。",
         "",
         "## 本次构建变化",
         "",

@@ -3,6 +3,13 @@ from __future__ import annotations
 from datetime import date
 import re
 
+from stock_picker.research_logic import (
+    classify_reported_growth,
+    industry_rank_assessment,
+    merge_report_summaries,
+    normalized_forward_eps_growth,
+)
+
 
 def _num(value):
     try:
@@ -18,38 +25,31 @@ def _text(value) -> str:
     return "" if text.lower() in {"nan", "nat", "none", "<na>"} else text
 
 
-def _forward_eps_growth(summary: dict, as_of: date) -> tuple[int | None, float | None, float | None]:
-    forecasts = []
-    for item in summary.get("forecasts", []) or []:
-        try:
-            if str(item.get("type", "")).strip().lower() != "forecast" or item.get("eps_source_verified") is not True:
-                continue
-            year = int(item.get("year"))
-            eps = _num(item.get("eps"))
-            if eps is not None and eps > 0:
-                forecasts.append((year, eps))
-        except (TypeError, ValueError, AttributeError):
-            continue
-    forecasts = sorted(set(forecasts))
-    if len(forecasts) < 2:
-        return None, None, None
-    target_options = [entry for entry in forecasts if entry[0] > as_of.year]
-    target = target_options[0] if target_options else forecasts[-1]
-    prior_options = [entry for entry in forecasts if entry[0] < target[0]]
-    if not prior_options:
-        return target[0], target[1], None
-    prior = prior_options[-1]
-    if prior[1] <= 0:
-        return target[0], target[1], None
-    growth_pct = (target[1] / prior[1] - 1) * 100
-    return target[0], target[1], growth_pct
-
-
 def _scenario_valuation(summary: dict, settings: dict, as_of: date) -> dict:
-    year, eps, growth_pct = _forward_eps_growth(summary, as_of)
-    if year is None or eps is None or growth_pct is None or growth_pct <= 0:
-        return {"status": "missing_forecast", "forecast_year": year, "eps": eps, "growth_pct": growth_pct, "scenarios": {}}
     assumptions = settings["valuation"]
+    growth = normalized_forward_eps_growth(
+        summary,
+        as_of,
+        min_span_years=int(assumptions.get("min_growth_span_years", 2)),
+        max_span_years=int(assumptions.get("max_growth_span_years", 3)),
+    )
+    growth_pct = growth.get("growth_pct")
+    year = growth.get("target_year")
+    eps = growth.get("target_eps")
+    if growth.get("status") != "calculated" or year is None or eps is None or growth_pct is None or growth_pct <= 0:
+        return {
+            "status": "missing_forecast",
+            "forecast_year": year,
+            "eps": eps,
+            "growth_pct": growth_pct,
+            "growth_method": growth.get("method"),
+            "growth_start_year": growth.get("start_year"),
+            "growth_start_eps": growth.get("start_eps"),
+            "growth_span_years": growth.get("span_years"),
+            "missing_reason": growth.get("reason"),
+            "scenarios": {},
+        }
+
     discount_rate = float(assumptions["discount_rate"])
     months_to_year_end = (12 - as_of.month) / 12
     discount_years = max(0.1, year - as_of.year + months_to_year_end)
@@ -75,6 +75,10 @@ def _scenario_valuation(summary: dict, settings: dict, as_of: date) -> dict:
         "forecast_year": year,
         "eps": eps,
         "growth_pct": growth_pct,
+        "growth_method": growth.get("method"),
+        "growth_start_year": growth.get("start_year"),
+        "growth_start_eps": growth.get("start_eps"),
+        "growth_span_years": growth.get("span_years"),
         "discount_rate_pct": discount_rate * 100,
         "discount_years": round(discount_years, 2),
         "scenarios": results,
@@ -89,7 +93,7 @@ def _is_st_or_delist(name: str) -> bool:
 def evaluate_candidate(reports: list[dict], market_data: dict, settings: dict) -> dict:
     latest = sorted(reports, key=lambda r: (r.get("report_date", ""), r.get("file", "")))[-1]
     code = latest.get("code", "")
-    summary = latest.get("summary", {}) or {}
+    summary = merge_report_summaries(reports)
     quote = market_data.get("candidates", {}).get(code, {}) or {}
     technical = quote.get("technical", {}) or {}
     today = date.fromisoformat(market_data["as_of"])
@@ -103,14 +107,18 @@ def evaluate_candidate(reports: list[dict], market_data: dict, settings: dict) -
     ps = ps_raw if ps_raw is not None and ps_raw > 0 else None
     peg = pe / growth_pct if pe is not None and growth_pct is not None and growth_pct > 0 else None
     ratios = {"pe_ttm": pe, "pb": pb, "ps_ttm": ps, "peg": peg}
-    rejection_reasons = []
-    pending_reasons = []
+    rejection_reasons: list[str] = []
+    pending_reasons: list[str] = []
+    research_notes: list[str] = []
     report_risk_flags = [
         {"file": report.get("file"), **flag}
         for report in reports
         for flag in report.get("risk_flags", [])
         if isinstance(flag, dict)
     ]
+
+    rank_assessment = industry_rank_assessment(code, quote, settings)
+    growth_assessment = classify_reported_growth(quote)
 
     if latest.get("market") not in settings["universe"]["markets"]:
         status = "OUTSIDE_SCOPE"
@@ -136,18 +144,21 @@ def evaluate_candidate(reports: list[dict], market_data: dict, settings: dict) -
         elif market_cap < min_cap:
             rejection_reasons.append(f"总市值 {market_cap:.1f} 亿元低于 {min_cap:.0f} 亿元门槛")
 
-        leader_rank = _num(quote.get("industry_rank"))
-        if leader_rank is None:
-            pending_reasons.append("行业市值排名缺失，无法确认龙头/中军")
-        elif leader_rank > float(settings["universe"]["industry_leader_rank_max"]):
-            rejection_reasons.append(f"行业市值排名第 {leader_rank:.0f}，未进入前 {settings['universe']['industry_leader_rank_max']} 名")
+        if rank_assessment.get("reject_reason"):
+            rejection_reasons.append(rank_assessment["reject_reason"])
+        if rank_assessment.get("pending_reason"):
+            pending_reasons.append(rank_assessment["pending_reason"])
+        if rank_assessment.get("note"):
+            research_notes.append(rank_assessment["note"])
 
         evidence = summary.get("orders", {}) or {}
         financial_evidence = summary.get("financial_evidence", {}) or {}
-        netprofit_yoy = _num(quote.get("netprofit_yoy_pct"))
-        revenue_yoy = _num(quote.get("revenue_yoy_pct"))
-        reported_growth = (netprofit_yoy is not None and netprofit_yoy > 0) or (revenue_yoy is not None and revenue_yoy > 0)
-        order_verified = bool(evidence.get("confirmed") and evidence.get("quote") and evidence.get("page"))
+        order_verified = bool(
+            evidence.get("confirmed")
+            and evidence.get("quote")
+            and evidence.get("page")
+            and evidence.get("source_verified") is True
+        )
         reported_financial_verified = bool(
             financial_evidence.get("confirmed")
             and financial_evidence.get("fact_type") == "reported_actual"
@@ -155,9 +166,11 @@ def evaluate_candidate(reports: list[dict], market_data: dict, settings: dict) -
             and financial_evidence.get("quote")
             and financial_evidence.get("page")
         )
-        order_verified = order_verified and evidence.get("source_verified") is True
+        reported_growth = bool(growth_assessment.get("verified"))
+        if growth_assessment.get("basis") != "missing":
+            research_notes.append("已披露业绩判断：" + str(growth_assessment.get("detail") or ""))
         if not (order_verified or reported_financial_verified or reported_growth):
-            pending_reasons.append("未验证真实订单或正向已披露业绩")
+            pending_reasons.append("未验证真实订单、研报已披露实绩或正向已披露业绩")
 
         if report_risk_flags:
             rejection_reasons.append("研报明确提示退市或终止上市风险")
@@ -165,7 +178,8 @@ def evaluate_candidate(reports: list[dict], market_data: dict, settings: dict) -
         if any(value is None for value in (pe, pb, ps)):
             pending_reasons.append("PE/PB/PS 数据不完整")
         if valuation_scenarios["status"] != "calculated":
-            pending_reasons.append("缺少可用于 PEG 情景估值的正向未来 EPS 增速")
+            span = settings["valuation"].get("min_growth_span_years", 2)
+            pending_reasons.append(f"缺少至少 {span} 年跨度、可核验且正向的未来 EPS CAGR")
         elif peg is not None:
             max_peg = float(settings["valuation"]["max_peg_for_core"])
             if peg > max_peg:
@@ -219,7 +233,7 @@ def evaluate_candidate(reports: list[dict], market_data: dict, settings: dict) -
         required_summary = ("industry_logic", "company_logic", "profit_model", "financial_quality")
         summary_complete = all(isinstance(summary.get(field), str) and len(summary[field].strip()) >= 20 for field in required_summary)
         if summary.get("summary_mode") != "ai" or not summary_complete or not summary.get("risks"):
-            pending_reasons.append("研报尚未完成 AI 归纳，当前逻辑为原文规则摘录")
+            pending_reasons.append("最新研报尚未完成 AI 归纳，当前逻辑为原文规则摘录")
 
         status = "REJECTED" if rejection_reasons else ("PENDING" if pending_reasons else "CORE")
 
@@ -242,8 +256,11 @@ def evaluate_candidate(reports: list[dict], market_data: dict, settings: dict) -
         "quote": {key: value for key, value in quote.items() if key != "technical"},
         "technical": technical,
         "valuation": {"ratios": ratios, "scenario": valuation_scenarios},
+        "industry_rank_assessment": rank_assessment,
+        "reported_growth_assessment": growth_assessment,
         "rejection_reasons": rejection_reasons,
         "pending_reasons": pending_reasons,
+        "research_notes": research_notes,
         "report_risk_flags": report_risk_flags,
         "financial_quality": financial_quality,
     }
@@ -285,8 +302,11 @@ def build_watchlist(reports: list[dict], market_data: dict, settings: dict) -> d
         "criteria": {
             "min_market_cap_yi": settings["universe"]["min_market_cap_yi"],
             "industry_leader_rank_max": settings["universe"]["industry_leader_rank_max"],
+            "broad_industry_rank_mode": settings["universe"].get("broad_industry_rank_mode", "reference"),
             "max_quote_age_days": settings["data"]["max_quote_age_days"],
             "max_peg_for_core": settings["valuation"]["max_peg_for_core"],
+            "min_growth_span_years": settings["valuation"].get("min_growth_span_years", 2),
+            "max_growth_span_years": settings["valuation"].get("max_growth_span_years", 3),
             "min_avg_amount_20d_yi": settings["technical"]["min_avg_amount_20d_yi"],
             "min_amount_ratio_5d_20d": settings["technical"]["min_amount_ratio_5d_20d"],
             "volume_ratio_5d_20d_range": [

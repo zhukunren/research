@@ -826,7 +826,7 @@
       const rejection = [...(candidate.rejection_reasons || []), ...(candidate.pending_reasons || [])];
       $("detail-panel").innerHTML = `
         <div class="detail-head">
-          <div><h2 class="detail-name">${esc(candidate.company)} ${statusTag(candidate.status)}</h2><div class="detail-code">${esc(candidate.code)} · ${esc(marketName(candidate.market))}${quote.industry ? ` · ${esc(quote.industry)}` : ""}${quote.industry_rank ? ` · 行业排名 ${esc(fmt(quote.industry_rank, 0))}` : ""}</div></div>
+          <div><h2 class="detail-name">${esc(candidate.company)} ${statusTag(candidate.status)}</h2><div class="detail-code">${esc(candidate.code)} · ${esc(marketName(candidate.market))}${quote.industry ? ` · ${esc(quote.industry)}` : ""}${(candidate.industry_rank_assessment || {}).basis === "verified_subindustry" ? ` · 细分排名 ${esc(fmt(candidate.industry_rank_assessment.rank, 0))}` : (quote.industry_rank ? ` · 宽行业排名 ${esc(fmt(quote.industry_rank, 0))}（参考）` : "")}</div></div>
           <div class="detail-price"><strong>${price == null ? "待补" : `${fmt(price)} 元`}</strong><span>行情日 ${esc(technical.quote_date || "待补")}</span></div>
         </div>
         <section class="detail-section"><div class="section-heading"><h3>投资逻辑</h3><span>${summarizedByAi ? "AI 归纳" : (state.health?.llm_endpoint_blocked ? "HTTP 端点受阻" : "待重跑 AI")}</span></div>

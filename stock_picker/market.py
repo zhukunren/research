@@ -34,7 +34,7 @@ def _load_local_bars(parquet_path: Path, codes: list[str]) -> dict[str, pd.DataF
     if table.num_rows == 0:
         return {}
     frame = table.to_pandas()
-    frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce")
+    frame["trade_date"] = _parse_dates(frame["trade_date"])
     return {code: group.sort_values("trade_date").reset_index(drop=True) for code, group in frame.groupby("stock_code")}
 
 

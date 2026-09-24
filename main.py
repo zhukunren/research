@@ -9,6 +9,7 @@ from stock_picker.market import collect_market_data
 from stock_picker.output import write_outputs
 from stock_picker.reports import load_reports
 from stock_picker.screening import build_watchlist
+from stock_picker.validation import build_forward_validation, write_forward_validation
 
 
 def main() -> int:
@@ -19,6 +20,8 @@ def main() -> int:
     build.add_argument("--refresh-ai", action="store_true", help="Refresh cached AI report summaries")
     check = subparsers.add_parser("check", help="Check local inputs and configuration without network requests")
     check.add_argument("--offline", action="store_true", help="Check whether the local Parquet supports an offline build")
+    validate = subparsers.add_parser("validate", help="Measure forward returns of saved watchlist snapshots")
+    validate.add_argument("--horizons", nargs="+", type=int, help="Trading-day horizons, e.g. 5 20 60")
     args = parser.parse_args()
 
     settings = load_settings()
@@ -27,6 +30,14 @@ def main() -> int:
         for item in checks:
             print(f"[{item['status']}] {item['name']}: {item['detail']}")
         return 1 if any(item["status"] == "ERROR" for item in checks) else 0
+
+    if args.command == "validate":
+        result = build_forward_validation(settings, horizons=args.horizons)
+        md_path, json_path = write_forward_validation(result, settings["paths"]["output_dir"])
+        print(f"History builds: {result['history_build_count']}; matured observations: {result['matured_record_count']}")
+        print(f"Markdown: {md_path}")
+        print(f"JSON: {json_path}")
+        return 0
 
     reports = load_reports(settings, refresh_ai=args.refresh_ai)
     if not reports:
